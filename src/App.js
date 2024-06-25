@@ -68,6 +68,7 @@ function App() {
         if (contFerias > 13) {
           contFerias = 0;
         }
+        
 
         resultadosTemp.push({
           mes: `${mes}/${ano}`,
