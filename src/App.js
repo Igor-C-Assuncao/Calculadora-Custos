@@ -90,7 +90,7 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Calculadora do Cidadão</h1>
+      <h1>Calculadora de Custos</h1>
       <form onSubmit={handleSubmit}>
         <label>
           Valor Inicial (R$):
