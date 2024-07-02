@@ -7,8 +7,8 @@ function App() {
   const [valorInicial, setValorInicial] = useState(0);
   const [dataInicio, setDataInicio] = useState('');
   const [dataTermino, setDataTermino] = useState('');
-  const [indice, setIndice] = useState('');
-  const [incluirFerias, setIncluirFerias] = useState(false);
+  const [indices, setIndices] = useState({ ipca: false, poupanca: false });
+  const [feriasDatas, setFeriasDatas] = useState(['']);
   const [error, setError] = useState(null);
   const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -37,7 +37,7 @@ function App() {
 
     try {
       // Input validation
-      if (!dataInicio || !dataTermino || !indice) {
+      if (!dataInicio || !dataTermino || (!indices.ipca && !indices.poupanca)) {
         setError("Por favor, preencha todos os campos.");
         return;
       }
@@ -47,35 +47,43 @@ function App() {
         return;
       }
 
-      const indexData = await fetchIndexData(indice);
+      const indexData = {};
+      if (indices.ipca) indexData.ipca = await fetchIndexData('ipca');
+      if (indices.poupanca) indexData.poupanca = await fetchIndexData('poupanca');
+
       let saldo = parseFloat(valorInicial);
       let dataAtual = new Date(dataInicio);
       const dataFim = new Date(dataTermino);
       const resultadosTemp = [];
-      let contFerias = 0;
+      let saldoTemp = 0;
 
       while (dataAtual <= dataFim) {
-        const ano = dataAtual.getFullYear();
-        const mes = meses[dataAtual.getMonth()]; 
-        const acrescimoPercentual = indexData[ano]?.[mes] || 0; 
-        
 
-        const acrescimo = saldo * (acrescimoPercentual / 100);
-        saldo += acrescimo;
-        const ferias = incluirFerias && contFerias > 12  ? saldo / 3 : 0;
+        saldoTemp = saldo;
+        const ano = dataAtual.getFullYear();
+        const mes = meses[dataAtual.getMonth()];
+
+        const acrescimoPercentualIpca = indexData.ipca?.[ano]?.[mes] || 0;
+        const acrescimoPercentualPoupanca = indexData.poupanca?.[ano]?.[mes] || 0;
+
+        const acrescimoIpca = saldo * (acrescimoPercentualIpca / 100);
+        const acrescimoPoupanca = saldo * (acrescimoPercentualPoupanca / 100);
+        saldo += acrescimoIpca + acrescimoPoupanca;
+
+        const isFerias = feriasDatas.some(date => new Date(date).getTime() === dataAtual.getTime());
+        const ferias = isFerias ? saldo / 3 : 0;
         saldo += ferias;
-        contFerias += 1;
-        if (contFerias > 13) {
-          contFerias = 0;
-        }
+
         
 
         resultadosTemp.push({
           mes: `${mes}/${ano}`,
-          saldoInicial: parseFloat(saldo.toFixed(2)),
-          acrescimoPercentual,
-          acrescimoValor: parseFloat(acrescimo.toFixed(2)),
-          saldoFinal: parseFloat((saldo).toFixed(2)),
+          saldoInicial: parseFloat(saldoTemp.toFixed(2)),
+          acrescimoPercentualIpca,
+          acrescimoValorIpca: parseFloat(acrescimoIpca.toFixed(2)),
+          acrescimoPercentualPoupanca,
+          acrescimoValorPoupanca: parseFloat(acrescimoPoupanca.toFixed(2)),
+          saldoFinal: parseFloat(saldo.toFixed(2)),
           ferias: parseFloat(ferias.toFixed(2)),
         });
 
@@ -86,6 +94,21 @@ function App() {
       console.error("Erro ao calcular valores:", error);
       setError("Ocorreu um erro ao calcular os valores.");
     }
+  };
+
+  const addFeriasDate = () => {
+    setFeriasDatas([...feriasDatas, '']);
+  };
+
+  const handleFeriasDateChange = (index, value) => {
+    const newFeriasDatas = [...feriasDatas];
+    newFeriasDatas[index] = value;
+    setFeriasDatas(newFeriasDatas);
+  };
+
+  const removeFeriasDate = (index) => {
+    const newFeriasDatas = feriasDatas.filter((_, i) => i !== index);
+    setFeriasDatas(newFeriasDatas);
   };
 
   return (
@@ -105,19 +128,29 @@ function App() {
           <input type="date" name="dataTermino" value={dataTermino} onChange={(e) => setDataTermino(e.target.value)} required />
         </label>
         <label>
-          Índice:
-          <select name="indice" value={indice} onChange={(e) => setIndice(e.target.value)}>
-            <option value="">Selecione</option>
-            <option value="ipca">IPCA</option> 
-            <option value="poupanca">Poupança</option> 
-          </select>
+          Índices:
+          <label>
+            <input type="checkbox" name="ipca" checked={indices.ipca} onChange={(e) => setIndices({ ...indices, ipca: e.target.checked })} />
+            IPCA
+          </label>
+          <label>
+            <input type="checkbox" name="poupanca" checked={indices.poupanca} onChange={(e) => setIndices({ ...indices, poupanca: e.target.checked })} />
+            Poupança
+          </label>
         </label>
         <label>
-          Incluir Férias:
-          <select name="incluirFerias" value={incluirFerias ? "Sim" : "Não"} onChange={(e) => setIncluirFerias(e.target.value === "Sim")}>
-            <option value="Sim">Sim</option>
-            <option value="Não">Não</option>
-          </select>
+          Férias:
+          {feriasDatas.map((data, index) => (
+            <div key={index}>
+              <input
+                type="date"
+                value={data}
+                onChange={(e) => handleFeriasDateChange(index, e.target.value)}
+              />
+              {index > 0 && <button type="button" onClick={() => removeFeriasDate(index)}>Remover</button>}
+            </div>
+          ))}
+          <button type="button" onClick={addFeriasDate}>+</button>
         </label>
         <button type="submit">Calcular</button>
       </form>
@@ -131,8 +164,10 @@ function App() {
             <tr>
               <th>Mês/Ano</th>
               <th>Saldo Inicial</th>
-              <th>Acréscimo (%)</th>
-              <th>Acréscimo (R$)</th>
+              <th>Acréscimo IPCA (%)</th>
+              <th>Acréscimo IPCA (R$)</th>
+              <th>Acréscimo Poupança (%)</th>
+              <th>Acréscimo Poupança (R$)</th>
               <th>Saldo Final</th>
               <th>Férias (R$)</th>
             </tr>
@@ -142,14 +177,21 @@ function App() {
               <tr key={index}>
                 <td>{resultado.mes}</td>
                 <td>{resultado.saldoInicial}</td>
-                <td>{resultado.acrescimoPercentual}</td>
-                <td>{resultado.acrescimoValor}</td>
+                <td>{resultado.acrescimoPercentualIpca}</td>
+                <td>{resultado.acrescimoValorIpca}</td>
+                <td>{resultado.acrescimoPercentualPoupanca}</td>
+                <td>{resultado.acrescimoValorPoupanca}</td>
                 <td>{resultado.saldoFinal}</td>
                 <td>{resultado.ferias}</td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+      {resultados.length > 0 && (
+        <div className="total-saldo">
+          <h3>Total Final: R$ {resultados[resultados.length - 1].saldoFinal}</h3>
+        </div>
       )}
     </div>
   );
