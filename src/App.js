@@ -38,7 +38,7 @@ function App() {
     try {
       // Input validation
       if (!dataInicio || !dataTermino || (!indices.ipca && !indices.poupanca)) {
-        setError("Por favor, preencha todos os campos.");
+        setError("Por favor, preencha todos os campos e escolha os indices !");
         return;
       }
       
